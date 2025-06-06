@@ -1,0 +1,39 @@
+pipeline {
+    agent any
+
+    environment {
+        KUBECONFIG = '/home/jenkins/.kube/config' // Adjust if needed
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/Sano-Mickey/k8s-hello-app.git'
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'kubectl apply -f configmap.yaml'
+                sh 'kubectl apply -f deployment.yaml'
+                sh 'kubectl apply -f service.yaml'
+            }
+        }
+
+        stage('Test Deployment') {
+            steps {
+                script {
+                    // Wait until pods are ready
+                    sh 'kubectl rollout status deployment/hello-app -n default --timeout=120s'
+
+                    // Test the service using port-forward
+                    sh '''
+                    kubectl port-forward svc/hello-app-service 8085:85 &
+                    sleep 5
+                    curl -s http://localhost:8085/
+                    '''
+                }
+            }
+        }
+    }
+}
