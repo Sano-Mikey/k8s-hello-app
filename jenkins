@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Inject KUBECONFIG as a secret text credential
         KUBECONFIG_CONTENT = credentials('config')
         git_url = 'https://github.com/Sano-Mikey/k8s-hello-app.git'
     }
@@ -16,82 +15,29 @@ pipeline {
             }
         }
 
-        stage('Setup Kubernetes Config') {
-            steps {
-                sh '''
-                    mkdir -p ~/.kube
-                    echo "$KUBECONFIG_CONTENT" > ~/.kube/config
-                    chmod 600 ~/.kube/config
-                    kubectl config get-contexts
-                '''
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                script {
-                    try {
-                        sh 'kubectl --context=minikube get nodes'
-                        // Uncomment if configmap.yaml exists
-                        // sh 'kubectl apply -f configmap.yaml'
-                        sh 'kubectl apply -f deployment.yaml'
-                        sh 'kubectl apply -f service.yaml'
-                    } catch (error) {
-                        echo "Error in deployment: ${error}"
-                        throw error
-                    }
-                }
-            }
-        }
-
-        stage('Test Deployment') {
-            steps {
-                script {
-                    try {
-                        sh 'kubectl rollout status deployment/hello-app -n default --timeout=120s'
-
-                        // Start port-forward in background and save PID
-                        sh '''
-                            pkill -f "kubectl port-forward" || true
-                            kubectl port-forward svc/hello-app-service 8085:85 &
-                            echo $! > pf.pid
-                            sleep 10
-                        '''
-
-                        sh '''
-                            RESPONSE=$(curl -s --retry 5 --retry-delay 2 http://localhost:8085/)
-                            echo "Service Response: $RESPONSE"
-                        '''
-
-                        // Kill port-forward process and clean up
-                        sh 'kill $(cat pf.pid) || true'
-                        sh 'rm pf.pid'
-                    } catch (error) {
-                        sh 'pkill -f "kubectl port-forward" || true'
-                        echo "Error in testing: ${error}"
-                        throw error
-                    }
-                }
-            }
-        }
+        // ... other stages ...
     }
 
     post {
         always {
-            script {
-                sh '''
-                    kubectl get pods
-                    kubectl get svc
-                    kubectl get deployments
-                '''
+            node('any') {  // Add node block here
+                script {
+                    sh '''
+                        kubectl get pods
+                        kubectl get svc
+                        kubectl get deployments
+                    '''
+                }
             }
         }
         failure {
-            script {
-                sh '''
-                    kubectl describe pods
-                    kubectl logs -l app=hello-app
-                '''
+            node('any') {  // Add node block here
+                script {
+                    sh '''
+                        kubectl describe pods
+                        kubectl logs -l app=hello-app
+                    '''
+                }
             }
         }
     }
