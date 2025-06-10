@@ -15,12 +15,64 @@ pipeline {
             }
         }
 
-        // ... other stages ...
+        stage('Setup Kubernetes Config') {
+            steps {
+                sh '''
+                    mkdir -p ~/.kube
+                    echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+                    chmod 600 ~/.kube/config
+                    kubectl config get-contexts
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    try {
+                        sh 'kubectl --context=minikube get nodes'
+                        sh 'kubectl apply -f deployment.yaml'
+                        sh 'kubectl apply -f service.yaml'
+                    } catch (error) {
+                        echo "Error in deployment: ${error}"
+                        throw error
+                    }
+                }
+            }
+        }
+
+        stage('Test Deployment') {
+            steps {
+                script {
+                    try {
+                        sh 'kubectl rollout status deployment/hello-app -n default --timeout=120s'
+                        sh '''
+                            pkill -f "kubectl port-forward" || true
+                            kubectl port-forward svc/hello-app-service 8085:85 &
+                            echo $! > pf.pid
+                            sleep 10
+                        '''
+
+                        sh '''
+                            RESPONSE=$(curl -s --retry 5 --retry-delay 2 http://localhost:8085/)
+                            echo "Service Response: $RESPONSE"
+                        '''
+
+                        sh 'kill $(cat pf.pid) || true'
+                        sh 'rm pf.pid'
+                    } catch (error) {
+                        sh 'pkill -f "kubectl port-forward" || true'
+                        echo "Error in testing: ${error}"
+                        throw error
+                    }
+                }
+            }
+        }
     }
 
     post {
         always {
-            node('any') {  // Add node block here
+            node {  // Using node without specifying 'any'
                 script {
                     sh '''
                         kubectl get pods
@@ -31,7 +83,7 @@ pipeline {
             }
         }
         failure {
-            node('any') {  // Add node block here
+            node {  // Using node without specifying 'any'
                 script {
                     sh '''
                         kubectl describe pods
