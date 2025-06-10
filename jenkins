@@ -68,43 +68,53 @@ pipeline {
                 }
             }
         }
+    }
 
-        // Add a new stage for post-deployment checks
-        stage('Post-Deployment Checks') {
-            steps {
-                script {
-                    try {
-                        sh '''
-                            echo "Checking deployment status..."
-                            kubectl get pods
-                            kubectl get svc
-                            kubectl get deployments
-                        '''
-                    } catch (error) {
-                        echo "Error in post-deployment checks: ${error}"
-                        sh '''
-                            echo "Getting detailed pod information..."
-                            kubectl describe pods
-                            kubectl logs -l app=hello-app
-                        '''
-                        throw error
+    post {
+        always {
+            stage('Post Build Actions') {
+                steps {
+                    script {
+                        try {
+                            echo "Running post-deployment checks..."
+                            sh '''
+                                kubectl get pods
+                                kubectl get svc
+                                kubectl get deployments
+                            '''
+                        } catch (Exception e) {
+                            echo "Error in post-deployment checks: ${e.getMessage()}"
+                        }
                     }
                 }
             }
         }
-    }
-
-    // Simplified post actions
-    post {
-        always {
-            echo "Pipeline completed"
-            cleanWs() // Clean workspace after build
-        }
-        success {
-            echo "Pipeline succeeded"
-        }
         failure {
-            echo "Pipeline failed"
+            stage('Failure Analysis') {
+                steps {
+                    script {
+                        try {
+                            echo "Getting failure details..."
+                            sh '''
+                                kubectl describe pods
+                                kubectl logs -l app=hello-app
+                            '''
+                        } catch (Exception e) {
+                            echo "Error getting failure details: ${e.getMessage()}"
+                        }
+                    }
+                }
+            }
+        }
+        cleanup {
+            stage('Cleanup') {
+                steps {
+                    script {
+                        echo "Cleaning up workspace..."
+                        deleteDir()
+                    }
+                }
+            }
         }
     }
 }
