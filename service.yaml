@@ -5,8 +5,9 @@ metadata:
 spec:
   selector:
     app: hello-app
+  type: NodePort
   ports:
-    - protocol: TCP
-      port: 85
-      targetPort: 8080
-  type: ClusterIP
+  - protocol: TCP
+    port: 85
+    targetPort: 8080
+    nodePort: 30885

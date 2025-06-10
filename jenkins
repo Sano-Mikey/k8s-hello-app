@@ -2,21 +2,17 @@ pipeline {
     agent any
 
     environment {
-        KUBECONFIG = credentials('config')
+        // If 'config' is a secret text credential, this injects content
+        KUBECONFIG_CONTENT = credentials('config')
         git_url = 'https://github.com/Sano-Mikey/k8s-hello-app.git'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout scmGit(
-                    branches: [[name:'*/main']], 
-                    extensions: [], 
-                    userRemoteConfigs: [[
-                        credentialsId: 'gitlab-access', 
-                        url: env.git_url
-                    ]]
-                )
+                git branch: 'main',
+                    credentialsId: 'git_access',
+                    url: env.git_url
             }
         }
 
@@ -24,7 +20,7 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p ~/.kube
-                    echo "$KUBECONFIG" > ~/.kube/config
+                    echo "$KUBECONFIG_CONTENT" > ~/.kube/config
                     chmod 600 ~/.kube/config
                     kubectl config get-contexts
                 '''
@@ -36,7 +32,8 @@ pipeline {
                 script {
                     try {
                         sh 'kubectl --context=minikube get nodes'
-                        sh 'kubectl apply -f configmap.yaml'
+                        // Remove configmap.yaml if not present in repo or add it
+                        // sh 'kubectl apply -f configmap.yaml' 
                         sh 'kubectl apply -f deployment.yaml'
                         sh 'kubectl apply -f service.yaml'
                     } catch (error) {
@@ -51,25 +48,24 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Wait until pods are ready
                         sh 'kubectl rollout status deployment/hello-app -n default --timeout=120s'
 
-                        // Kill any existing port-forward processes
-                        sh 'pkill -f "kubectl port-forward" || true'
-
-                        // Test the service using port-forward
+                        // Start port-forward in background and save PID
                         sh '''
+                            pkill -f "kubectl port-forward" || true
                             kubectl port-forward svc/hello-app-service 8085:85 &
-                            FORWARD_PID=$!
+                            echo $! > pf.pid
                             sleep 10
-                            
-                            # Test the endpoint
+                        '''
+
+                        sh '''
                             RESPONSE=$(curl -s --retry 5 --retry-delay 2 http://localhost:8085/)
                             echo "Service Response: $RESPONSE"
-                            
-                            # Kill port-forward process
-                            kill $FORWARD_PID || true
                         '''
+
+                        // Kill the specific port-forward process
+                        sh 'kill $(cat pf.pid) || true'
+                        sh 'rm pf.pid'
                     } catch (error) {
                         sh 'pkill -f "kubectl port-forward" || true'
                         echo "Error in testing: ${error}"
@@ -96,4 +92,3 @@ pipeline {
         }
     }
 }
-

@@ -18,12 +18,11 @@ spec:
         ports:
         - containerPort: 8080
         env:
-        - name: GREETING
+        - name: MESSAGE
           value: "Hello from Kubernetes"
         volumeMounts:
-        - name: config-volume
-          mountPath: /etc/config
+        - name: app-volume
+          mountPath: /app
       volumes:
-      - name: config-volume
-        configMap:
-          name: hello-app-config
+      - name: app-volume
+        emptyDir: {}
