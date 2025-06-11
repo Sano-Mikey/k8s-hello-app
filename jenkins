@@ -32,7 +32,6 @@ pipeline {
                     try {
                         sh 'kubectl --context=minikube get nodes'
                         sh 'kubectl apply -f deployment.yaml'
-                        sh 'kubectl apply -f service.yaml'
                     } catch (error) {
                         echo "Error in deployment: ${error}"
                         throw error
@@ -41,80 +40,5 @@ pipeline {
             }
         }
 
-        stage('Test Deployment') {
-            steps {
-                script {
-                    try {
-                        sh 'kubectl rollout status deployment/hello-app -n default --timeout=120s'
-                        sh '''
-                            pkill -f "kubectl port-forward" || true
-                            kubectl port-forward svc/hello-app-service 8085:85 &
-                            echo $! > pf.pid
-                            sleep 10
-                        '''
-
-                        sh '''
-                            RESPONSE=$(curl -s --retry 5 --retry-delay 2 http://localhost:8085/)
-                            echo "Service Response: $RESPONSE"
-                        '''
-
-                        sh 'kill $(cat pf.pid) || true'
-                        sh 'rm pf.pid'
-                    } catch (error) {
-                        sh 'pkill -f "kubectl port-forward" || true'
-                        echo "Error in testing: ${error}"
-                        throw error
-                    }
-                }
-            }
-        }
-    }
-
-    post {
-        always {
-            stage('Post Build Actions') {
-                steps {
-                    script {
-                        try {
-                            echo "Running post-deployment checks..."
-                            sh '''
-                                kubectl get pods
-                                kubectl get svc
-                                kubectl get deployments
-                            '''
-                        } catch (Exception e) {
-                            echo "Error in post-deployment checks: ${e.getMessage()}"
-                        }
-                    }
-                }
-            }
-        }
-        failure {
-            stage('Failure Analysis') {
-                steps {
-                    script {
-                        try {
-                            echo "Getting failure details..."
-                            sh '''
-                                kubectl describe pods
-                                kubectl logs -l app=hello-app
-                            '''
-                        } catch (Exception e) {
-                            echo "Error getting failure details: ${e.getMessage()}"
-                        }
-                    }
-                }
-            }
-        }
-        cleanup {
-            stage('Cleanup') {
-                steps {
-                    script {
-                        echo "Cleaning up workspace..."
-                        deleteDir()
-                    }
-                }
-            }
-        }
     }
 }
