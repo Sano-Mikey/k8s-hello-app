@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        KUBECONFIG_CONTENT = credentials('config')
+        KUBECONFIG_CONTENT = credentials('kubeconfig-local')
         git_url = 'https://github.com/Sano-Mikey/k8s-hello-app.git'
     }
 
