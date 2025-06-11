@@ -19,7 +19,7 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p ~/.kube
-                    echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+                    cp "$KUBECONFIG_CONTENT"  ~/.kube/config
                     chmod 600 ~/.kube/config
                     kubectl config get-contexts
                 '''
